@@ -24,9 +24,22 @@ var con = mysql.createConnection({
   database: "courses" // 需要更改为你的数据库名称
 });
 
-// 连接验证并创建课程表（如果不存在）
+// 连接验证并创建数据库和表（如果不存在）
 con.connect(function(err) {
   if (err) throw err;
+
+   // 创建数据库
+   con.query("CREATE DATABASE IF NOT EXISTS courses", function (err, result) {
+    if (err) throw err;
+    console.log("Database created"); 
+  });
+
+  // 使用新创建的数据库
+  con.query("USE courses", function (err, result) {
+    if (err) throw err;
+    console.log("Database changed to courses");
+  });
+
   //创建 courses 表
   con.query(
     "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2))",
@@ -41,7 +54,16 @@ con.connect(function(err) {
   function (err, result) {
     if (err) throw err;
     console.log("users Table created");
-  }); 
+  });
+
+  //创建reservations 表
+  con.query(
+    "CREATE TABLE IF NOT EXISTS reservations (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), courseId VARCHAR(255), reservationStatus VARCHAR(255), courseTime DATETIME, courseTitle VARCHAR(255))",
+    function (err, result) {
+      if (err) throw err;
+      console.log("reservations table created");
+    }
+  );
 });
 
 
@@ -206,6 +228,44 @@ app.delete('/api/deleteUsers/:id', (req, res) => {
     }
     res.status(200).send({ message: '用户删除成功' });
   });
+});
+
+// 对应前端 '/api/postReservation' 的POST请求
+app.post('/api/postReservation', (req, res) => {
+  try {
+      // 从请求体中获取用户名和课程ID
+      const { users, courseId, courseTitle } = req.body;
+
+      // 预约信息实体
+      let reservation = {
+          username: users,
+          courseId: courseId,
+          courseTitle:courseTitle,
+          reservationStatus: '成功', // 预约状态，这里默认为"成功"
+          courseTime: new Date() // 课程时间
+      }
+
+      // 将预约信息添加到数据库中
+      let sql = "INSERT INTO reservations (username, courseId,reservationStatus, courseTime, courseTitle) VALUES ?";
+      let values = [
+        [reservation.username, reservation.courseId, reservation.reservationStatus, reservation.courseTime, reservation.courseTitle,]
+      ];
+
+      con.query(sql, [values], function (err, result) {
+        if (err) throw err;
+        console.log("Number of records inserted: " + result.affectedRows);
+      });
+
+      // 返回预约状态和课程时间
+      res.json({
+          reservationStatus: reservation.reservationStatus,
+          courseTime: reservation.courseTime
+      });
+
+  } catch (error) {
+      // 发生错误，返回错误状态码和错误信息
+      res.status(500).json({error: "预约失败，请稍后再试。"});
+  }
 });
 
 // search 搜索接口
