@@ -236,35 +236,46 @@ app.post('/api/postReservation', (req, res) => {
       // 从请求体中获取用户名和课程ID
       const { users, courseId, courseTitle } = req.body;
 
-      // 预约信息实体
-      let reservation = {
-          username: users,
-          courseId: courseId,
-          courseTitle:courseTitle,
-          reservationStatus: '成功', // 预约状态，这里默认为"成功"
-          courseTime: new Date() // 课程时间
-      }
+      // 首先检查是否存在相同的预约
+      let checkSql = "SELECT * FROM reservations WHERE username = ? AND courseId = ?";
+      
+      con.query(checkSql, [users, courseId], function (err, result) {
+        if (err) return res.json({status: "error", message: "查询预约时出错，请稍后再试"});
+        
+        if (result.length > 0) {
+          // 如果已经存在预约，返回错误消息
+          return res.json({status: "error", message: "你已经预约过这门课程了"});
+        }
 
-      // 将预约信息添加到数据库中
-      let sql = "INSERT INTO reservations (username, courseId,reservationStatus, courseTime, courseTitle) VALUES ?";
-      let values = [
-        [reservation.username, reservation.courseId, reservation.reservationStatus, reservation.courseTime, reservation.courseTitle,]
-      ];
+        // 预约信息实体
+        let reservation = {
+            username: users,
+            courseId: courseId,
+            courseTitle: courseTitle,
+            reservationStatus: '预约成功', // 预约状态，这里默认为"成功"
+            courseTime: new Date() // 课程时间
+        }
 
-      con.query(sql, [values], function (err, result) {
-        if (err) throw err;
-        console.log("Number of records inserted: " + result.affectedRows);
+        // 如果没有预约，进行预约操作
+        let sql = "INSERT INTO reservations (username, courseId,reservationStatus, courseTime, courseTitle) VALUES ?";
+        let values = [
+          [reservation.username, reservation.courseId, reservation.reservationStatus, reservation.courseTime, reservation.courseTitle,]
+        ];
+
+        con.query(sql, [values], function (err, result) {
+          if (err) throw err;
+          console.log("Number of records inserted: " + result.affectedRows)
+
+          // 返回预约状态和课程时间
+          res.json({
+                reservationStatus: reservation.reservationStatus,
+                courseTime: reservation.courseTime
+          });
+        });
       });
-
-      // 返回预约状态和课程时间
-      res.json({
-          reservationStatus: reservation.reservationStatus,
-          courseTime: reservation.courseTime
-      });
-
   } catch (error) {
       // 发生错误，返回错误状态码和错误信息
-      res.status(500).json({error: "预约失败，请稍后再试。"});
+      res.status(500).json({error: "预约失败，请稍后再试。"}); 
   }
 });
 
