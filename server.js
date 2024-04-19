@@ -295,6 +295,27 @@ app.get('/api/search', (req, res) => {
   });
 });
 
+
+app.get('/api/courseregistration', function(req, res) {
+  // 从查询参数中获取用户名
+  let username = req.query.username;
+
+  // 构造SQL查询，以在注册表中查找匹配的用户名
+  //let sql = `SELECT * FROM reservations WHERE username = ?`;
+  let sql = `select * from reservations join courses on reservations.courseTitle = courses.title where reservations.username = ?`;
+
+  // 执行查询
+  con.query(sql, username, function(err, result) {
+    if (err) {
+      res.send({ code: 500, message: '服务器出错' });
+      throw err;
+    }
+
+    // 将查询的结果发送到客户端
+    res.send(result);
+  });
+});
+
 // 最后，添加错误处理器
 app.use(function (err, req, res, next) {
   console.error(err.stack);  // 打印错误堆栈跟踪
