@@ -58,7 +58,7 @@ con.connect(function(err) {
 
   //创建reservations 表
   con.query(
-    "CREATE TABLE IF NOT EXISTS reservations (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), courseId VARCHAR(255), reservationStatus VARCHAR(255), courseTime DATETIME, courseTitle VARCHAR(255))",
+    "CREATE TABLE IF NOT EXISTS reservations (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), courseId VARCHAR(255), reservationStatus VARCHAR(255), courseTime DATETIME, courseTitle VARCHAR(255), paymentStatus VARCHAR(255))",
     function (err, result) {
       if (err) throw err;
       console.log("reservations table created");
@@ -253,13 +253,14 @@ app.post('/api/postReservation', (req, res) => {
             courseId: courseId,
             courseTitle: courseTitle,
             reservationStatus: '预约成功', // 预约状态，这里默认为"成功"
+            paymentStatus:'未支付',
             courseTime: new Date() // 课程时间
         }
 
         // 如果没有预约，进行预约操作
-        let sql = "INSERT INTO reservations (username, courseId,reservationStatus, courseTime, courseTitle) VALUES ?";
+        let sql = "INSERT INTO reservations (username, courseId,reservationStatus, courseTime, courseTitle, paymentStatus) VALUES ?";
         let values = [
-          [reservation.username, reservation.courseId, reservation.reservationStatus, reservation.courseTime, reservation.courseTitle,]
+          [reservation.username, reservation.courseId, reservation.reservationStatus, reservation.courseTime, reservation.courseTitle,reservation.paymentStatus]
         ];
 
         con.query(sql, [values], function (err, result) {
@@ -302,7 +303,7 @@ app.get('/api/courseregistration', function(req, res) {
 
   // 构造SQL查询，以在注册表中查找匹配的用户名
   //let sql = `SELECT * FROM reservations WHERE username = ?`;
-  let sql = `select * from reservations join courses on reservations.courseTitle = courses.title where reservations.username = ?`;
+  let sql = `select * from reservations join courses on reservations.courseTitle = courses.title where reservations.username = ? and reservations.paymentStatus = '未支付'`;
 
   // 执行查询
   con.query(sql, username, function(err, result) {
@@ -313,6 +314,26 @@ app.get('/api/courseregistration', function(req, res) {
 
     // 将查询的结果发送到客户端
     res.send(result);
+  });
+});
+
+app.post('/api/payment-successful', (req, res) => {
+  // 在这里处理你的逻辑，例如记录支付状态到数据库
+  let courseTitle = req.body.params.courseTitle
+  console.log(req.body);  // 查看发送的数据
+
+
+  // 更新数据库
+  const sql = `UPDATE reservations SET paymentStatus = '已支付' WHERE courseTitle = ${mysql.escape(courseTitle)}`;
+
+  console.log(sql)
+  con.query(sql, (err, result) => {
+      if(err) throw err;
+      console.log(`更改了${result.affectedRows}行`);
+  });
+  // 发送响应
+  res.send({
+    message: 'Payment received successfully!'
   });
 });
 
