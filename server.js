@@ -317,6 +317,27 @@ app.get('/api/courseregistration', function(req, res) {
   });
 });
 
+app.get('/api/paycourseregistration', function(req, res) {
+  // 从查询参数中获取用户名
+  let username = req.query.username;
+
+  // 构造SQL查询，以在注册表中查找匹配的用户名
+  //let sql = `SELECT * FROM reservations WHERE username = ?`;
+  let sql = `select * from reservations join courses on reservations.courseTitle = courses.title where reservations.username = ? and reservations.paymentStatus = '已支付'`;
+
+  // 执行查询
+  con.query(sql, username, function(err, result) {
+    if (err) {
+      res.send({ code: 500, message: '服务器出错' });
+      throw err;
+    }
+
+    // 将查询的结果发送到客户端
+    res.send(result);
+  });
+});
+
+
 
 // //获取已经预约用户列表接口
 // app.get('/api/getusers', (req, res) => {
