@@ -10,11 +10,16 @@ const saltRounds = 10;
 const jwt = require('jsonwebtoken');
 const SECRET_KEY = 'oGIPC9UPzGF3cAE0iAhtcSBoLWCW0i3J';
 
+
+var multer  = require('multer');
+var upload = multer({ dest: 'uploads/' }); // 设置文件临时存储路径
+var fs = require('fs');
+
 app.use(cors());
 // 为了接收 JSON 格式的请求体，我们需要使用 body-parser 中间件.
 app.use(bodyParser.json());
 
-
+app.use('/uploads', express.static('E:/workspace/code/code/ArtClassBookingSystem/ArtClassBookingSystem-Server/uploads'));
 
 // 连接MySQL
 var con = mysql.createConnection({
@@ -42,7 +47,7 @@ con.connect(function(err) {
 
   //创建 courses 表
   con.query(
-    "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2))",
+    "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2), course_id INT)",
     function (err, result) {
       if (err) throw err;
       console.log("Table created");
@@ -64,6 +69,55 @@ con.connect(function(err) {
       console.log("reservations table created");
     }
   );
+
+   //创建 course_images 表
+   con.query(
+    "CREATE TABLE IF NOT EXISTS course_images (id INT AUTO_INCREMENT, course_id INT NOT NULL, image BLOB, PRIMARY KEY (id))",
+    function (err, result) {
+      if (err) throw err;
+      console.log("course_images table created");
+    }
+  );
+});
+
+
+// http://localhost:3000/upload 接口
+app.post('/upload', upload.single('file'), (req, res, next) => {
+  var file = req.file;
+  let tmp_path = file.path;
+  let target_path = 'uploads/' + file.originalname;
+
+  var course_id = req.body.course_id; // 获取表单中的课程ID;文件上传表单应该包含名为"course_id"的字段
+
+  var save_image = (path) => {
+    var query = 'INSERT INTO `course_images` (`course_id`, `image`) VALUES(?, ?)';
+    // 将图片的完整路径存入数据库，而不是整个图片数据
+    con.query(query, [course_id, path], (error, results, fields) => {
+      if (error) {
+        return console.error(error.message);
+      }
+      console.log('Image Path Saved to DataBase with Course Id: ', course_id, ' and Image Id: ', results.insertId);
+    });
+  }
+
+  // 将文件移动到期望的位置
+  fs.rename(tmp_path, target_path, function(err) {
+    if (err) throw err;
+    
+    // 将图片路径存入数据库
+    save_image(target_path);
+  });
+
+  res.send("File uploaded");
+});
+
+
+app.get('/api/courses_images', (req, res) => {
+  let sql = 'SELECT * FROM course_images';
+  con.query(sql, (err, results) => {
+    if(err) throw err;
+    res.send(results);
+  });
 });
 
 
@@ -99,6 +153,7 @@ app.get('/api/courses', (req, res) => {
     res.send(results);
   });
 });
+
 
 // 更新编辑课程接口
 app.put('/api/courses/:id', (req, res) => {
