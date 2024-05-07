@@ -111,9 +111,9 @@ app.post('/upload', upload.single('file'), (req, res, next) => {
   res.send("File uploaded");
 });
 
-
+// http://localhost:3000/api/courses_images
 app.get('/api/courses_images', (req, res) => {
-  let sql = 'SELECT * FROM course_images';
+  let sql = 'SELECT * FROM course_images JOIN courses on course_images.course_id = courses.course_id';
   con.query(sql, (err, results) => {
     if(err) throw err;
     res.send(results);
@@ -124,9 +124,9 @@ app.get('/api/courses_images', (req, res) => {
 //课程管理路由添加课程
 app.post('/courses', (req, res) => {
   // 将新课程保存到数据库
-  var sql = "INSERT INTO courses (title, description, teacher, duration, date, price) VALUES ?";
+  var sql = "INSERT INTO courses (title, description, teacher, duration, date, price, course_id) VALUES ?";
   var values = [
-    [req.body.title, req.body.description, req.body.teacher, req.body.duration, format(new Date(req.body.date), 'yyyy-MM-dd HH:mm:ss'), req.body.price]
+    [req.body.title, req.body.description, req.body.teacher, req.body.duration, format(new Date(req.body.date), 'yyyy-MM-dd HH:mm:ss'), req.body.price, req.body.course_id]
   ];
   
   con.query(sql, [values], function (err, result) {
