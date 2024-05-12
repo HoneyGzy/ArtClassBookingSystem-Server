@@ -47,7 +47,7 @@ con.connect(function(err) {
 
   //创建 courses 表
   con.query(
-    "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2), course_id INT)",
+    "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2), course_id INT,category VARCHAR(255), difficulty VARCHAR(255), recommended_age INT)",
     function (err, result) {
       if (err) throw err;
       console.log("Table created");
@@ -124,9 +124,9 @@ app.get('/api/courses_images', (req, res) => {
 //课程管理路由添加课程
 app.post('/courses', (req, res) => {
   // 将新课程保存到数据库
-  var sql = "INSERT INTO courses (title, description, teacher, duration, date, price, course_id) VALUES ?";
+  var sql = "INSERT INTO courses (title, description, teacher, duration, date, price, course_id, category, difficulty, recommended_age ) VALUES ?";
   var values = [
-    [req.body.title, req.body.description, req.body.teacher, req.body.duration, format(new Date(req.body.date), 'yyyy-MM-dd HH:mm:ss'), req.body.price, req.body.course_id]
+    [req.body.title, req.body.description, req.body.teacher, req.body.duration, format(new Date(req.body.date), 'yyyy-MM-dd HH:mm:ss'), req.body.price, req.body.course_id, req.body.courseCategory,req.body.difficultyLevel,req.body.recommendedAge]
   ];
   
   con.query(sql, [values], function (err, result) {
@@ -154,6 +154,33 @@ app.get('/api/courses', (req, res) => {
   });
 });
 
+const categories = {
+  'music': '音乐',
+  'dance': '舞蹈',
+  'draw': '绘画',
+  'calligraphy': '书法',
+  'design': '设计',
+  'sculpture': '雕塑',
+  'photo': '摄影',
+  'musical': '乐器'
+};
+
+app.get('/courses', (req, res) => {
+  const type = req.query.type;
+
+  if (!type) {
+      res.status(400).send('Missing type parameter');
+      return;
+  }
+
+   // translate the category
+   const chineseCategory = categories[type];
+  // Query the database
+  con.query('SELECT * FROM courses WHERE category = ?', [chineseCategory], function(error, results, fields) {
+      if (error) throw error;
+      res.json(results);
+  });
+});
 
 // 更新编辑课程接口
 app.put('/api/courses/:id', (req, res) => {
