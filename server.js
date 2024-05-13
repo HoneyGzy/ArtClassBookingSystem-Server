@@ -233,9 +233,11 @@ app.post('/login', async (req, res) => {
         if(role === "admin") {
           // 发送包含token的响应和adminFlag
           res.status(200).json({ message: '登录成功', token, adminFlag: true });
-        } else {
-          // 发送包含token的响应
-          res.status(200).json({ message: '登录成功', token });
+        } else if (role === "teacher") {
+          // 发送包含token的响应 
+          res.status(200).json({ message: '登录成功', token, teacherFlag: true });
+        } else{
+          res.status(200).json({ message: '登录成功', token, studentFlag: true });
         }
       } else {
         res.status(401).send('用户名或密码错误');
