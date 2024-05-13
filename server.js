@@ -26,25 +26,25 @@ var con = mysql.createConnection({
   host: "localhost",
   user: "root", // 需要更改为你的MySQL用户名
   password: "admin", // 需要更改为你的MySQL密码
-  database: "courses" // 需要更改为你的数据库名称
+  //database: "courses" // 需要更改为你的数据库名称
 });
 
 // 连接验证并创建数据库和表（如果不存在）
 con.connect(function(err) {
   if (err) throw err;
-
-   // 创建数据库
-   con.query("CREATE DATABASE IF NOT EXISTS courses", function (err, result) {
+  
+  // 创建数据库
+  con.query("CREATE DATABASE IF NOT EXISTS courses", function (err, result) {
     if (err) throw err;
     console.log("Database created"); 
   });
-
+  
   // 使用新创建的数据库
   con.query("USE courses", function (err, result) {
     if (err) throw err;
     console.log("Database changed to courses");
   });
-
+  
   //创建 courses 表
   con.query(
     "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2), course_id INT,category VARCHAR(255), difficulty VARCHAR(255), recommended_age INT)",
@@ -123,6 +123,7 @@ app.get('/api/courses_images', (req, res) => {
 
 //课程管理路由添加课程
 app.post('/courses', (req, res) => {
+  console.log(req);
   // 将新课程保存到数据库
   var sql = "INSERT INTO courses (title, description, teacher, duration, date, price, course_id, category, difficulty, recommended_age ) VALUES ?";
   var values = [
@@ -131,12 +132,11 @@ app.post('/courses', (req, res) => {
   
   con.query(sql, [values], function (err, result) {
     if (err) {
-       console.log(err.code)
       // 检查是否为价格长度过长的错误
       if (err.code === 'ER_WARN_DATA_OUT_OF_RANGE') {
         return res.status(400).json({ error: '价格长度过长' });
       }
-
+      console.log(err)
       // 其他错误
       return res.status(500).json({ error: '服务器错误' });
     }
