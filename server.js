@@ -336,7 +336,7 @@ app.post('/api/postReservation', (req, res) => {
             username: users,
             courseId: courseId,
             courseTitle: courseTitle,
-            reservationStatus: '预约成功', // 预约状态，这里默认为"成功"
+            reservationStatus: '审核中', // 预约状态，这里默认为"成功"
             paymentStatus:'未支付',
             courseTime: new Date() // 课程时间
         }
@@ -421,21 +421,10 @@ app.get('/api/paycourseregistration', function(req, res) {
   });
 });
 
-
-
-// //获取已经预约用户列表接口
-// app.get('/api/getusers', (req, res) => {
-//   let sql = 'SELECT * FROM users';
-//   con.query(sql, (err, results) => {
-//     if(err) throw err;
-//     res.send(results);
-//   });
-// });
-
 app.get('/api/getAllcourseregistration', function(req, res) {
   // 构造SQL查询，以在注册表中查找匹配的用户名
   //let sql = `SELECT * FROM reservations WHERE username = ?`;
-  let sql = `select * from reservations where reservations.reservationStatus = '预约成功'`;
+  let sql = `select * from reservations where reservations.reservationStatus = '审核中'`;
 
   // 执行查询
   con.query(sql, function(err, result) {
@@ -449,11 +438,30 @@ app.get('/api/getAllcourseregistration', function(req, res) {
   });
 });
 
+//修改课程预约表修改预约状态为预约成功
+app.post('/api/courseregistration_status', (req, res) => {
+  // 在这里处理你的逻辑，例如记录支付状态到数据库
+  let courseId = req.body.params.courseId
+  console.log(req.body);  // 查看发送的数据
+
+  // 更新数据库
+  const sql = `UPDATE reservations SET reservationStatus = '预约成功' WHERE courseId = ?`;
+
+  con.query(sql, [courseId], (err, result) => {
+    if(err) throw err;
+    console.log(`更改了${result.affectedRows}行`);
+  });
+  // 发送响应
+  res.send({
+    message: 'courseregistration_status received successfully!'
+  });
+});
+
+
 app.post('/api/payment-successful', (req, res) => {
   // 在这里处理你的逻辑，例如记录支付状态到数据库
   let courseTitle = req.body.params.courseTitle
   console.log(req.body);  // 查看发送的数据
-
 
   // 更新数据库
   const sql = `UPDATE reservations SET paymentStatus = '已支付' WHERE courseTitle = ${mysql.escape(courseTitle)}`;
