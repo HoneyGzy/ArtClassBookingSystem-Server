@@ -456,6 +456,32 @@ app.get('/api/getAllAlreadycourseregistration', function(req, res) {
   });
 });
 
+//教师查询谁预约了自己的课程
+app.get('/api/getInfocourseregistration', function(req, res) {
+  // 构造SQL查询，以在注册表中查找匹配的用户名
+  let username = req.query.username;
+  let sql = `SELECT *
+  FROM reservations
+  WHERE courseId IN (
+      SELECT courses.course_id
+      FROM users
+      INNER JOIN courses ON users.teacher_id = courses.teacher_id
+      WHERE users.username = ?
+  )
+  AND reservationStatus = '预约成功';`;
+
+  // 执行查询
+  con.query(sql, [username], function(err, result) {
+    if (err) {
+      res.send({ code: 500, message: '服务器出错' });
+      throw err;
+    }
+
+    // 将查询的结果发送到客户端
+    res.send(result);
+  });
+});
+
 //修改课程预约表修改预约状态为预约成功
 app.post('/api/courseregistration_status', (req, res) => {
   // 在这里处理你的逻辑，例如记录支付状态到数据库
