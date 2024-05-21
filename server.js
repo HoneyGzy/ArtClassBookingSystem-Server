@@ -47,7 +47,7 @@ con.connect(function(err) {
   
   //创建 courses 表
   con.query(
-    "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2), course_id INT,category VARCHAR(255), difficulty VARCHAR(255), recommended_age INT)",
+    "CREATE TABLE IF NOT EXISTS courses (id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255), description VARCHAR(255), teacher VARCHAR(255), duration INT, date DATETIME, price DECIMAL(5,2), course_id INT,category VARCHAR(255), difficulty VARCHAR(255), recommended_age INT,teacher_id INT)",
     function (err, result) {
       if (err) throw err;
       console.log("Table created");
@@ -55,7 +55,7 @@ con.connect(function(err) {
   
   //创建 users 表
   con.query(
-  "CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, role VARCHAR(255), username VARCHAR(255), password VARCHAR(255))",
+  "CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, role VARCHAR(255), username VARCHAR(255), password VARCHAR(255), teacher_id INT NULL)",
   function (err, result) {
     if (err) throw err;
     console.log("users Table created");
@@ -122,12 +122,12 @@ app.get('/api/courses_images', (req, res) => {
 
 
 //课程管理路由添加课程
-app.post('/courses', (req, res) => {
+app.post('/api/create_courses', (req, res) => {
   console.log(req);
   // 将新课程保存到数据库
-  var sql = "INSERT INTO courses (title, description, teacher, duration, date, price, course_id, category, difficulty, recommended_age ) VALUES ?";
+  var sql = "INSERT INTO courses (title, description, teacher, duration, date, price, course_id, category, difficulty, recommended_age, teacher_id ) VALUES ?";
   var values = [
-    [req.body.title, req.body.description, req.body.teacher, req.body.duration, format(new Date(req.body.date), 'yyyy-MM-dd HH:mm:ss'), req.body.price, req.body.course_id, req.body.courseCategory,req.body.difficultyLevel,req.body.recommendedAge]
+    [req.body.title, req.body.description, req.body.teacher, req.body.duration, format(new Date(req.body.date), 'yyyy-MM-dd HH:mm:ss'), req.body.price, req.body.course_id, req.body.courseCategory,req.body.difficultyLevel,req.body.recommendedAge,req.body.teacher_id]
   ];
   
   con.query(sql, [values], function (err, result) {
@@ -250,15 +250,16 @@ app.post('/login', async (req, res) => {
 
 // 用户注册路由
 app.post('/api/register', (req, res) => {
-  const { role, username, password } = req.body;
+  console.log(req)
+  const { role, username, password, teacherId } = req.body;
   console.log(role, username, password)
   // hash user password
   bcrypt.genSalt(saltRounds, function(err, salt) {
     bcrypt.hash(password, salt, function(err, hash) {
       // Store hashed password in your DB.
-      var sql = "INSERT INTO users (role, username, password) VALUES ?";
+      var sql = "INSERT INTO users (role, username, password, teacher_id) VALUES ?";
       var values = [
-        [role, username, hash]
+        [role, username, hash, teacherId]
       ];
       con.query(sql, [values], function (err, result) {
         if (err) {
@@ -425,6 +426,23 @@ app.get('/api/getAllcourseregistration', function(req, res) {
   // 构造SQL查询，以在注册表中查找匹配的用户名
   //let sql = `SELECT * FROM reservations WHERE username = ?`;
   let sql = `select * from reservations where reservations.reservationStatus = '审核中'`;
+
+  // 执行查询
+  con.query(sql, function(err, result) {
+    if (err) {
+      res.send({ code: 500, message: '服务器出错' });
+      throw err;
+    }
+
+    // 将查询的结果发送到客户端
+    res.send(result);
+  });
+});
+
+app.get('/api/getAllAlreadycourseregistration', function(req, res) {
+  // 构造SQL查询，以在注册表中查找匹配的用户名
+  //let sql = `SELECT * FROM reservations WHERE username = ?`;
+  let sql = `select * from reservations where reservations.reservationStatus = '预约成功'`;
 
   // 执行查询
   con.query(sql, function(err, result) {
