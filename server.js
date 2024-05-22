@@ -78,6 +78,36 @@ con.connect(function(err) {
       console.log("course_images table created");
     }
   );
+  //创建 profile 表
+  con.query(
+    `CREATE TABLE IF NOT EXISTS profile (
+      id INT AUTO_INCREMENT,
+      username VARCHAR(255),
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      phone VARCHAR(20),
+      registerTime DATETIME,
+      gender VARCHAR(10),
+      parentsName VARCHAR(255),
+      parentsPhone VARCHAR(20),
+      birthday DATE,
+      address VARCHAR(255),
+      PRIMARY KEY (id)
+    )`,
+    function (err, result) {
+      if (err) throw err;
+      console.log("profile table created");
+    }
+  );
+
+  // 创建 course_completion 表
+  con.query(
+    "CREATE TABLE IF NOT EXISTS course_completion (id INT AUTO_INCREMENT, username VARCHAR(255), course_id INT NOT NULL, teacher VARCHAR(255), title VARCHAR(255), PRIMARY KEY (id))",
+    function (err, result) {
+      if (err) throw err;
+      console.log("course_completion table created");
+    }
+  );
 });
 
 
@@ -518,6 +548,107 @@ app.post('/api/payment-successful', (req, res) => {
   // 发送响应
   res.send({
     message: 'Payment received successfully!'
+  });
+});
+
+// 获取用户信息
+app.get('/api/user/profile', (req, res) => {
+  const username = req.query.username; // Assuming the username is passed as a query parameter
+  const query = 'SELECT * FROM profile WHERE username = ?';
+  con.query(query, [username], (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+    } else if (results.length > 0) {
+      res.json(results[0]);
+    } else {
+      res.status(404).json({ error: 'User not found' });
+    }
+  });
+});
+
+// 提交用户信息
+app.post('/api/user/profile', (req, res) => {
+  // 从请求体中获取所有字段
+  let { id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address } = req.body;
+
+  // Parse registerTime to a date object and format it in MySQL standard datetime format
+  if (registerTime) {
+    registerTime = new Date(registerTime).toISOString().slice(0, 19).replace('T', ' ');
+  }
+
+  if (birthday) {
+    birthday = new Date(birthday).toISOString().slice(0, 19).replace('T', ' ');
+  }
+  console.log(birthday)
+
+  // 检查用户是否已存在
+  const checkQuery = 'SELECT * FROM profile WHERE username = ?';
+  con.query(checkQuery, [username], (checkErr, checkResults) => {
+    if (checkErr) {
+      res.status(500).json({ error: checkErr.message });
+    } else if (checkResults.length > 0) {
+      // 用户已存在，更新信息
+      const updateQuery = `UPDATE profile SET username = ?, name = ?, email = ?, phone = ?, registerTime = ?, gender = ?, parentsName = ?, parentsPhone = ?, birthday = ?, address = ? WHERE username = ?`;
+      con.query(updateQuery, [username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address, username], (updateErr) => {
+        if (updateErr) {
+          res.status(500).json({ error: updateErr.message });
+        } else {
+          res.json({ message: 'User updated successfully' });
+        }
+      });
+    } else {
+      // 新用户，插入记录
+      const insertQuery = `INSERT INTO profile (id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      con.query(insertQuery, [id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address], (insertErr) => {
+        if (insertErr) {
+          res.status(500).json({ error: insertErr.message });
+        } else {
+          res.json({ message: 'User created successfully' });
+        }
+      });
+    }
+  });
+});
+
+
+app.post('/api/course_completion', (req, res) => {
+  // 从请求体中获取数据
+  console.log(req)
+  const username = req.body.username;
+  const courseId = req.body.course_id;
+  const teacher = req.body.teacher;
+  const title = req.body.title;
+
+  // 创建插入数据的 SQL 语句
+  const sql = `
+    INSERT INTO course_completion (username, course_id, teacher, title)
+    VALUES (?, ?, ?, ?)
+  `;
+
+  // 执行 SQL 语句，将数据插入到数据库
+  con.query(sql, [username, courseId, teacher, title], (err, result) => {
+    if (err) {
+      console.log('Error in insert operation: ', err);
+      res.status(500).send('Error in operation');
+    } else {
+      console.log('Successfully inserted data');
+      res.status(200).send('Successfully inserted data');
+    }
+  });
+});
+
+app.get('/api/course_completion', (req, res) => {
+  const username = req.query.username;
+  console.log(req)
+  const sql = `SELECT title, teacher FROM course_completion WHERE username = ?`;
+
+  con.query(sql, username, (error, results, fields) => {
+    if (error) {
+      console.log(error);
+      res.status(500).send(error);
+    } else {
+      res.json(results);
+    }
   });
 });
 
