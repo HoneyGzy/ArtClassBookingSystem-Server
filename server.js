@@ -108,6 +108,16 @@ con.connect(function(err) {
       console.log("course_completion table created");
     }
   );
+
+  // 创建evaluations 表
+  con.query(
+    'CREATE TABLE IF NOT EXISTS evaluations (id INT AUTO_INCREMENT, teacher VARCHAR(255), course_name VARCHAR(255), comment TEXT, PRIMARY KEY (id))',
+    function (err, result) {
+      if (err) throw err;
+      console.log('evaluations table created');
+    }
+);
+
 });
 
 
@@ -612,27 +622,44 @@ app.post('/api/user/profile', (req, res) => {
 
 
 app.post('/api/course_completion', (req, res) => {
+  
   // 从请求体中获取数据
-  console.log(req)
   const username = req.body.username;
   const courseId = req.body.course_id;
   const teacher = req.body.teacher;
   const title = req.body.title;
 
-  // 创建插入数据的 SQL 语句
-  const sql = `
-    INSERT INTO course_completion (username, course_id, teacher, title)
-    VALUES (?, ?, ?, ?)
+  // 查询课程是否已经完成
+  const selectSql = `
+    SELECT * FROM course_completion 
+    WHERE username = ? AND course_id = ?
   `;
 
-  // 执行 SQL 语句，将数据插入到数据库
-  con.query(sql, [username, courseId, teacher, title], (err, result) => {
-    if (err) {
-      console.log('Error in insert operation: ', err);
+  con.query(selectSql, [username, courseId], (selectErr, selectResults) => {
+
+    if (selectErr) {
+      console.log('Error in select operation: ', selectErr);
       res.status(500).send('Error in operation');
+    } else if (selectResults.length > 0) {
+      console.log('Course already completed');
+      res.status(200).send('Course already completed');
     } else {
-      console.log('Successfully inserted data');
-      res.status(200).send('Successfully inserted data');
+      // 创建插入数据的 SQL 语句
+      const insertSql = `
+        INSERT INTO course_completion (username, course_id, teacher, title)
+        VALUES (?, ?, ?, ?)
+      `;
+
+      // 执行 SQL 语句，将数据插入到数据库
+      con.query(insertSql, [username, courseId, teacher, title], (insertErr, insertResults) => {
+        if (insertErr) {
+          console.log('Error in insert operation: ', insertErr);
+          res.status(500).send('Error in operation');
+        } else {
+          console.log('Successfully inserted data');
+          res.status(200).send('Successfully inserted data');
+        }
+      });      
     }
   });
 });
@@ -649,6 +676,21 @@ app.get('/api/course_completion', (req, res) => {
     } else {
       res.json(results);
     }
+  });
+});
+
+app.post('/api/evaluations', (req, res) => {
+  let form = req.body;
+  const query = 'INSERT INTO evaluations (teacher, course_name, comment) VALUES (?, ?, ?)';
+  const data = [form.target, form.course_name, form.content];
+  con.query(query, data, (err, results) => {
+    if (err) {
+      console.log(err);
+      res.sendStatus(500);
+      return;
+    }
+    console.log(results);
+    res.sendStatus(201);
   });
 });
 
