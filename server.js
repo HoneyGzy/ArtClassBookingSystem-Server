@@ -5,6 +5,7 @@ const port = 3000;
 const mysql = require('mysql2');
 const cors = require('cors');
 const { format } = require('date-fns');
+const moment = require('moment'); // 导入 moment
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const jwt = require('jsonwebtoken');
@@ -111,7 +112,7 @@ con.connect(function(err) {
 
   // 创建evaluations 表
   con.query(
-    'CREATE TABLE IF NOT EXISTS evaluations (id INT AUTO_INCREMENT, teacher VARCHAR(255), course_name VARCHAR(255), comment TEXT, PRIMARY KEY (id))',
+    'CREATE TABLE IF NOT EXISTS evaluations (id INT AUTO_INCREMENT, teacher VARCHAR(255), course_name VARCHAR(255), comment TEXT, username VARCHAR(255), PRIMARY KEY (id))',
     function (err, result) {
       if (err) throw err;
       console.log('evaluations table created');
@@ -153,7 +154,8 @@ app.post('/upload', upload.single('file'), (req, res, next) => {
 
 // http://localhost:3000/api/courses_images
 app.get('/api/courses_images', (req, res) => {
-  let sql = 'SELECT * FROM course_images JOIN courses on course_images.course_id = courses.course_id';
+  // let sql = 'SELECT * FROM course_images JOIN courses on course_images.course_id = courses.course_id';
+  let sql = 'SELECT * FROM course_images';
   con.query(sql, (err, results) => {
     if(err) throw err;
     res.send(results);
@@ -224,16 +226,49 @@ app.get('/courses', (req, res) => {
 
 // 更新编辑课程接口
 app.put('/api/courses/:id', (req, res) => {
-  const { title, description, teacher, duration, date, price } = req.body;
+  const { 
+    course_id,
+    title, 
+    description, 
+    teacher, 
+    teacher_id, 
+    duration, 
+    price, 
+    courseCategory, 
+    difficultyLevel, 
+    recommendedAge 
+  } = req.body;
+  const { date } = req.body; // 单独获取 date 以便于处理
   const { id } = req.params;
-  const sql = 'UPDATE courses SET title = ?, description = ?, teacher = ?, duration = ?, date = ?, price = ? WHERE id = ?';
-  con.query(sql, [title, description, teacher, duration, date, price, id], function (err, result) {
-      if (err) {
-          console.error(err);
-          return res.status(500).send('服务器错误');
-      }
-      console.log("Number of records updated: " + result.affectedRows);
-      res.status(200).send('课程更新成功');
+
+  // 将 date 转换为 MySQL 支持的格式
+  const formattedDate = moment(date).format('YYYY-MM-DD HH:mm:ss');
+
+  const sql = `UPDATE courses
+               SET course_id = ?, title = ?, description = ?, teacher = ?, teacher_id = ?, duration = ?, date = ?, price = ?, 
+               category = ?, difficulty = ?, recommended_age = ?
+               WHERE id = ?`;
+
+  con.query(sql, [
+    course_id, 
+    title, 
+    description, 
+    teacher, 
+    teacher_id, 
+    duration,
+    formattedDate, // 使用转换后的 date
+    price, 
+    courseCategory, 
+    difficultyLevel, 
+    recommendedAge, 
+    id
+  ], function (err, result) {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('服务器错误');
+    }
+    console.log("Number of records updated: " + result.affectedRows);
+    res.status(200).send('课程更新成功');
   });
 });
 
@@ -681,16 +716,34 @@ app.get('/api/course_completion', (req, res) => {
 
 app.post('/api/evaluations', (req, res) => {
   let form = req.body;
-  const query = 'INSERT INTO evaluations (teacher, course_name, comment) VALUES (?, ?, ?)';
-  const data = [form.target, form.course_name, form.content];
-  con.query(query, data, (err, results) => {
+  const checkQuery = 'SELECT * FROM evaluations WHERE teacher = ? AND course_name = ? AND username = ?';
+  const checkData = [form.target.split(' (')[1].slice(0, -1), form.course_name, form.username];
+
+  // 先进行查询操作
+  con.query(checkQuery, checkData, (err, results) => {
     if (err) {
       console.log(err);
       res.sendStatus(500);
       return;
     }
-    console.log(results);
-    res.sendStatus(201);
+
+    if (results.length > 0) {
+      // 如果查询结果不为空，说明已有相同记录，返回 409 冲突状态码
+      res.sendStatus(409);
+    } else {
+      // 如果查询结果为空，说明没有相同记录，可以进行插入操作
+      const insertQuery = 'INSERT INTO evaluations (teacher, course_name, comment, username) VALUES (?, ?, ?, ?)';
+      const insertData = [form.target.split(' (')[1].slice(0, -1), form.course_name, form.content, form.username];
+      con.query(insertQuery, insertData, (err, results) => {
+        if (err) {
+          console.log(err);
+          res.sendStatus(500);
+          return;
+        }
+        console.log(results);
+        res.sendStatus(201);
+      });
+    }
   });
 });
 
