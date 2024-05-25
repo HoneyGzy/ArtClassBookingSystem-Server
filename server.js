@@ -73,7 +73,7 @@ con.connect(function(err) {
 
    //创建 course_images 表
    con.query(
-    "CREATE TABLE IF NOT EXISTS course_images (id INT AUTO_INCREMENT, course_id INT NOT NULL, image BLOB, PRIMARY KEY (id))",
+    "CREATE TABLE IF NOT EXISTS course_images (id INT AUTO_INCREMENT PRIMARY KEY, course_id INT NOT NULL UNIQUE, image BLOB, reservation_count INT NULL)",
     function (err, result) {
       if (err) throw err;
       console.log("course_images table created");
@@ -121,7 +121,6 @@ con.connect(function(err) {
 
 });
 
-
 // http://localhost:3000/upload 接口
 app.post('/upload', upload.single('file'), (req, res, next) => {
   var file = req.file;
@@ -130,9 +129,16 @@ app.post('/upload', upload.single('file'), (req, res, next) => {
 
   var course_id = req.body.course_id; // 获取表单中的课程ID;文件上传表单应该包含名为"course_id"的字段
 
+  console.log('Received course_id:', course_id); // 调试输出
+
   var save_image = (path) => {
-    var query = 'INSERT INTO `course_images` (`course_id`, `image`) VALUES(?, ?)';
-    // 将图片的完整路径存入数据库，而不是整个图片数据
+    var query = `
+      INSERT INTO course_images (course_id, image)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE image = VALUES(image);
+    `;
+    
+    // 使用 UPSERT 操作插入或更新记录
     con.query(query, [course_id, path], (error, results, fields) => {
       if (error) {
         return console.error(error.message);
@@ -195,6 +201,31 @@ app.get('/api/courses', (req, res) => {
     res.send(results);
   });
 });
+
+// 获取指定课程列表接口
+app.get('/api/courses/:course_id', (req, res) => {
+  const course_id = req.params.course_id;
+  
+  console.log(course_id)
+  // 使用 `course_id` 查询数据库
+  const query = 'SELECT * FROM courses WHERE course_id = ?';
+  
+  con.query(query, [course_id], (error, results) => {
+    if (error) {
+      console.error('查询数据库时出错: ', error);
+      return res.status(500).json({ error: '数据库查询失败' });
+    }
+    
+    if (results.length > 0) {
+      // 如果找到了课程信息，则返回结果
+      res.json(results);
+    } else {
+      // 如果没有找到对应的课程信息，则返回 404
+      res.status(404).json({ error: '课程未找到' });
+    }
+  });
+});
+
 
 const categories = {
   'music': '音乐',
@@ -275,14 +306,61 @@ app.put('/api/courses/:id', (req, res) => {
 // 删除课程接口
 app.delete('/api/courses/:id', (req, res) => {
   const { id } = req.params;
-  const sql = 'DELETE FROM courses WHERE id = ?';
-  con.query(sql, [id], function(err, result) {
+  const { course_id } = req.body;
+
+  con.beginTransaction(err => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('服务器错误');
+    }
+
+    // 检查 course_images 表中是否存在该 course_id 的记录
+    const checkCourseImagesSql = 'SELECT COUNT(*) AS count FROM course_images WHERE course_id = ?';
+    con.query(checkCourseImagesSql, [course_id], (err, result) => {
       if (err) {
+        return con.rollback(() => {
           console.error(err);
-          return res.status(500).send('服务器错误');
+          res.status(500).send('服务器错误');
+        });
       }
-      console.log("Number of records deleted: " + result.affectedRows);
-      res.status(200).send('课程删除成功');
+
+      console.log("Number of records in course_images with course_id:", result[0].count);
+
+      const deleteCourseImagesSql = 'DELETE FROM course_images WHERE course_id = ?';
+      con.query(deleteCourseImagesSql, [course_id], (err, result) => {
+        if (err) {
+          return con.rollback(() => {
+            console.error(err);
+            res.status(500).send('服务器错误');
+          });
+        }
+
+        console.log("Number of records deleted in course_images: " + result.affectedRows);
+
+        const deleteCoursesSql = 'DELETE FROM courses WHERE id = ?';
+        con.query(deleteCoursesSql, [id], (err, result) => {
+          if (err) {
+            return con.rollback(() => {
+              console.error(err);
+              res.status(500).send('服务器错误');
+            });
+          }
+
+          console.log("Number of records deleted in courses: " + result.affectedRows);
+
+          con.commit(err => {
+            if (err) {
+              return con.rollback(() => {
+                console.error(err);
+                res.status(500).send('服务器错误');
+              });
+            }
+
+            res.status(200).send('课程及相关图片删除成功');
+          });
+        });
+      });
+    });
   });
 });
 
@@ -325,9 +403,7 @@ app.post('/login', async (req, res) => {
 
 // 用户注册路由
 app.post('/api/register', (req, res) => {
-  console.log(req)
   const { role, username, password, teacherId } = req.body;
-  console.log(role, username, password)
   // hash user password
   bcrypt.genSalt(saltRounds, function(err, salt) {
     bcrypt.hash(password, salt, function(err, hash) {
@@ -375,7 +451,6 @@ app.put('/api/updateUsers/:id', (req, res) => {
 
 // Delete 请求的路由处理删除用户信息
 app.delete('/api/deleteUsers/:id', (req, res) => {
-  console.log(req.params.id);
   const userId = req.params.id;
   const sql = `DELETE FROM users WHERE id = ?`;
 
@@ -561,7 +636,6 @@ app.get('/api/getInfocourseregistration', function(req, res) {
 app.post('/api/courseregistration_status', (req, res) => {
   // 在这里处理你的逻辑，例如记录支付状态到数据库
   let courseId = req.body.params.courseId
-  console.log(req.body);  // 查看发送的数据
 
   // 更新数据库
   const sql = `UPDATE reservations SET reservationStatus = '预约成功' WHERE courseId = ?`;
@@ -580,12 +654,10 @@ app.post('/api/courseregistration_status', (req, res) => {
 app.post('/api/payment-successful', (req, res) => {
   // 在这里处理你的逻辑，例如记录支付状态到数据库
   let courseTitle = req.body.params.courseTitle
-  console.log(req.body);  // 查看发送的数据
 
   // 更新数据库
   const sql = `UPDATE reservations SET paymentStatus = '已支付' WHERE courseTitle = ${mysql.escape(courseTitle)}`;
 
-  console.log(sql)
   con.query(sql, (err, result) => {
       if(err) throw err;
       console.log(`更改了${result.affectedRows}行`);
@@ -624,7 +696,6 @@ app.post('/api/user/profile', (req, res) => {
   if (birthday) {
     birthday = new Date(birthday).toISOString().slice(0, 19).replace('T', ' ');
   }
-  console.log(birthday)
 
   // 检查用户是否已存在
   const checkQuery = 'SELECT * FROM profile WHERE username = ?';
@@ -673,10 +744,8 @@ app.post('/api/course_completion', (req, res) => {
   con.query(selectSql, [username, courseId], (selectErr, selectResults) => {
 
     if (selectErr) {
-      console.log('Error in select operation: ', selectErr);
       res.status(500).send('Error in operation');
     } else if (selectResults.length > 0) {
-      console.log('Course already completed');
       res.status(200).send('Course already completed');
     } else {
       // 创建插入数据的 SQL 语句
@@ -688,10 +757,8 @@ app.post('/api/course_completion', (req, res) => {
       // 执行 SQL 语句，将数据插入到数据库
       con.query(insertSql, [username, courseId, teacher, title], (insertErr, insertResults) => {
         if (insertErr) {
-          console.log('Error in insert operation: ', insertErr);
           res.status(500).send('Error in operation');
         } else {
-          console.log('Successfully inserted data');
           res.status(200).send('Successfully inserted data');
         }
       });      
@@ -701,12 +768,10 @@ app.post('/api/course_completion', (req, res) => {
 
 app.get('/api/course_completion', (req, res) => {
   const username = req.query.username;
-  console.log(req)
   const sql = `SELECT title, teacher FROM course_completion WHERE username = ?`;
 
   con.query(sql, username, (error, results, fields) => {
     if (error) {
-      console.log(error);
       res.status(500).send(error);
     } else {
       res.json(results);
@@ -736,11 +801,9 @@ app.post('/api/evaluations', (req, res) => {
       const insertData = [form.target.split(' (')[1].slice(0, -1), form.course_name, form.content, form.username];
       con.query(insertQuery, insertData, (err, results) => {
         if (err) {
-          console.log(err);
           res.sendStatus(500);
           return;
         }
-        console.log(results);
         res.sendStatus(201);
       });
     }
