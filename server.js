@@ -79,6 +79,23 @@ con.connect(function(err) {
       console.log("course_images table created");
     }
   );
+
+   //创建 news_images 表
+  con.query(`
+  CREATE TABLE IF NOT EXISTS news_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    image_path VARCHAR(255) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    publish_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+  `, function (err, result) {
+    if (err) throw err;
+    console.log("news_images table created");
+  });
+
+
   //创建 profile 表
   con.query(
     `CREATE TABLE IF NOT EXISTS profile (
