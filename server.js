@@ -119,7 +119,7 @@ con.connect(function(err) {
     }
   );
 
-   // 创建news 表
+  // 创建news 表
   con.query(
     'CREATE TABLE IF NOT EXISTS news (' +
     'id INT AUTO_INCREMENT, ' +
@@ -130,6 +130,20 @@ con.connect(function(err) {
     function (err, result) {
       if (err) throw err;
       console.log('news table created');
+    }
+  );
+
+  // 创建annotation 表
+  con.query(
+    'CREATE TABLE IF NOT EXISTS annotations (' +
+    'id INT AUTO_INCREMENT, ' +
+    'title VARCHAR(255) NOT NULL, ' +
+    'content TEXT NOT NULL, ' +
+    'date DATETIME DEFAULT CURRENT_TIMESTAMP, ' +
+    'PRIMARY KEY (id))',
+    function (err, result) {
+      if (err) throw err;
+      console.log('annotations table created');
     }
   );
 });
@@ -931,6 +945,118 @@ app.put('/api/news/:id', (req, res) => {
     }
   });
 });
+
+
+
+//新增通知
+app.post('/api/annotations', (req, res) => {
+  let form = req.body;
+  // 输入验证，确保title和content不为空
+  if (!form.title || !form.content) {
+    return res.status(400).json({ error: 'Title和Content不能为空' });
+  }
+
+  const checkQuery = 'SELECT * FROM annotations WHERE title = ?';
+  const checkData = [form.title];
+
+  // 先进行查询操作
+  con.query(checkQuery, checkData, (err, results) => {
+    if (err) {
+      console.error('查询数据库时出错:', err);
+      return res.status(500).json({ error: '查询数据库时出错' });
+    }
+
+    if (results.length > 0) {
+      // 如果查询结果不为空，说明新闻标题已存在，返回 409 冲突状态码
+      return res.status(409).json({ error: '新闻标题已存在' });
+    } else {
+      // 如果查询结果为空，说明新闻标题不存在，可以进行插入操作
+      const insertQuery = 'INSERT INTO annotations (title, content, date) VALUES (?, ?, ?)';
+      const insertData = [form.title, form.content, new Date()]; // 假设您想要插入当前日期作为通知发布时间
+
+      con.query(insertQuery, insertData, (err, results) => {
+        if (err) {
+          console.error('插入数据库时出错:', err);
+          return res.status(500).json({ error: '插入数据库时出错' });
+        }
+        res.status(200).json({ message: '通知已添加' }); // 创建成功
+      });
+    }
+  });
+});
+
+//获取通知
+app.get('/api/annotations', (req, res) => {
+  // 定义查询新闻表的SQL语句
+  const checkQuery = 'SELECT * FROM annotations';
+
+  // 执行查询操作，这里不需要传入参数
+  con.query(checkQuery, (err, results) => {
+    if (err) {
+      // 如果查询过程中发生错误，记录错误并返回500状态码
+      console.error('查询数据库时出错:', err);
+      return res.status(500).json({ error: '数据库查询错误' });
+    }
+ 
+    // 如果没有错误发生，返回查询结果
+    // 此时不需要检查结果是否为空，直接返回所有新闻数据即可
+    res.status(200).json(results);
+  });
+});
+
+//删除通知
+app.delete('/api/annotations/:id', (req, res) => {
+  // 从请求的URL中获取通知ID
+  const newsId = req.params.id;
+
+  // 定义删除通知的SQL语句
+  const deleteQuery = 'DELETE FROM annotations WHERE id = ?';
+
+  // 执行删除操作
+  con.query(deleteQuery, [newsId], (err, results) => {
+    if (err) {
+      // 如果删除过程中发生错误，记录错误并返回相应的状态码
+      console.error('删除通知时出错:', err);
+      return res.status(500).json({ error: '数据库删除错误' });
+    }
+
+    // 检查是否真的删除了数据（affectedRows > 0代表有数据被删除）
+    if (results.affectedRows > 0) {
+      res.status(200).json({ message: '通知删除成功' });
+    } else {
+      // 没有找到对应ID的通知，可能是ID错误
+      res.status(404).json({ message: '通知不存在或已删除' });
+    }
+  });
+});
+
+//更新通知
+app.put('/api/annotations/:id', (req, res) => {
+  // 从请求体中获取更新后的通知标题和内容
+  const { title, content } = req.body;
+  // 从URL参数中获取通知ID
+  const newsId = req.params.id;
+
+  // 定义更新通知的SQL语句
+  const updateQuery = 'UPDATE annotations SET title = ?, content = ?, date = ? WHERE id = ?';
+
+  // 执行更新操作
+  con.query(updateQuery, [title, content, new Date(), newsId], (err, result) => {
+    if (err) {
+      console.error('更新通知时出错:', err);
+      return res.status(500).json({ error: '数据库更新错误' });
+    }
+
+    if (result.affectedRows > 0) {
+      // 如果有行受影响，说明更新成功
+      res.json({ message: '通知更新成功' });
+    } else {
+      // 没有行受影响，可能是因为没有找到对应的通知ID
+      res.status(404).json({ message: '通知不存在' });
+    }
+  });
+});
+
 
 // 最后，添加错误处理器
 app.use(function (err, req, res, next) {
