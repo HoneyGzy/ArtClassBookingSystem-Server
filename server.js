@@ -9,6 +9,8 @@ const moment = require('moment'); // 导入 moment
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const jwt = require('jsonwebtoken');
+const path = require('path');
+
 const SECRET_KEY = 'oGIPC9UPzGF3cAE0iAhtcSBoLWCW0i3J';
 
 
@@ -80,19 +82,20 @@ con.connect(function(err) {
     }
   );
 
-   //创建 news_images 表
+  // 创建 news_images 表（包括 newid 字段）
   con.query(`
-  CREATE TABLE IF NOT EXISTS news_images (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    image_path VARCHAR(255) NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    publish_date DATE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )
+    CREATE TABLE IF NOT EXISTS news_images (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      newid VARCHAR(255) NOT NULL,
+      image_path VARCHAR(255) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      content TEXT NOT NULL,
+      publish_date DATE NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
   `, function (err, result) {
     if (err) throw err;
-    console.log("news_images table created");
+    console.log('news_images table created');
   });
 
 
@@ -163,6 +166,16 @@ con.connect(function(err) {
       console.log('annotations table created');
     }
   );
+
+  //创建contacts表
+  con.query(
+    'CREATE TABLE IF NOT EXISTS contacts (id INT AUTO_INCREMENT, name VARCHAR(255) NOT NULL, phone VARCHAR(255) NOT NULL, email VARCHAR(255), content TEXT NOT NULL, date TIMESTAMP DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id))',
+    function (err, result) {
+      if (err) throw err;
+      console.log('contacts table created');
+    }
+  );
+
 });
 
 // http://localhost:3000/upload 接口
@@ -854,6 +867,73 @@ app.post('/api/evaluations', (req, res) => {
   });
 });
 
+app.get('/api/evaluations', (req, res) => {
+  const username = req.query.username;
+  const sql = `SELECT * FROM evaluations`;
+
+  con.query(sql, username, (error, results, fields) => {
+    if (error) {
+      res.status(500).send(error);
+    } else {
+      res.json(results);
+    }
+  });
+});
+
+
+//删除评价
+app.delete('/api/evaluations/:id', (req, res) => {
+  // 从请求的URL中获取评价ID
+  const evaluationId = req.params.id;
+
+  // 定义删除评价的SQL语句
+  const deleteQuery = 'DELETE FROM evaluations WHERE id = ?';
+
+  // 执行删除操作
+  con.query(deleteQuery, [evaluationId], (err, results) => {
+    if (err) {
+      // 如果删除过程中发生错误，记录错误并返回相应的状态码
+      console.error('删除评价时出错:', err);
+      return res.status(500).json({ error: '数据库删除错误' });
+    }
+
+    // 检查是否真的删除了数据（affectedRows > 0代表有数据被删除）
+    if (results.affectedRows > 0) {
+      res.status(200).json({ message: '评价删除成功' });
+    } else {
+      // 没有找到对应ID的评价，可能是ID错误
+      res.status(404).json({ message: '评价不存在或已删除' });
+    }
+  });
+});
+
+//更新评价
+app.put('/api/evaluations/:id', (req, res) => {
+  // 从请求体中获取更新后的评价数据
+  const { teacher, course_name, comment, username } = req.body;
+  // 从URL参数中获取评价ID
+  const evaluationId = req.params.id;
+
+  // 定义更新评价的SQL语句
+  const updateQuery = 'UPDATE evaluations SET teacher = ?, course_name = ?, comment = ?, username = ? WHERE id = ?';
+
+  // 执行更新操作
+  con.query(updateQuery, [teacher, course_name, comment, username, evaluationId], (err, result) => {
+    if (err) {
+      console.error('更新评价时出错:', err);
+      return res.status(500).json({ error: '数据库更新错误' });
+    }
+
+    if (result.affectedRows > 0) {
+      // 如果有行受影响，说明更新成功
+      res.json({ message: '评价更新成功' });
+    } else {
+      // 没有行受影响，可能是因为没有找到对应的评价ID
+      res.status(404).json({ message: '评价不存在' });
+    }
+  });
+});
+
 //新增资讯
 app.post('/api/news', (req, res) => {
   let form = req.body;
@@ -1073,6 +1153,97 @@ app.put('/api/annotations/:id', (req, res) => {
     }
   });
 });
+
+// http://localhost:3000/api/news_images 接口
+app.post('/api/news_images', upload.single('file'), (req, res, next) => {
+
+  console.log(req.file); // 查看文件对象
+  console.log(req.body); // 查看其他表单字段
+  var file = req.file;
+  let tmp_path = req.file.path;
+  let target_path = path.join('uploads', file.originalname);
+
+  var newid = req.body.newid; // 获取表单中的新闻ID
+  var title = req.body.title; // 获取新闻标题
+  var content = req.body.content; // 获取新闻内容
+  var publish_date = req.body.publish_date; // 获取发布日期
+
+  console.log('Received newid:', newid); // 调试输出
+
+  var save_image = (path) => {
+    var query = `
+      INSERT INTO news_images (newid, image_path, title, content, publish_date)
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE image_path = VALUES(image_path), title = VALUES(title), content = VALUES(content), publish_date = VALUES(publish_date);
+    `;
+    
+    // 使用 UPSERT 操作插入或更新记录
+    con.query(query, [newid, path, title, content, publish_date], (error, results, fields) => {
+      if (error) {
+        return console.error(error.message);
+      }
+      console.log('Image Path Saved to Database with newid: ', newid, ' and Image Id: ', results.insertId);
+    });
+  }
+
+  // 将文件移动到期望的位置
+  fs.rename(tmp_path, target_path, function(err) {
+    if (err) throw err;
+
+    // 将图片路径存入数据库
+    save_image(target_path);
+
+    res.send("File uploaded and record inserted/updated successfully");
+  });
+});
+
+// http://localhost:3000/api/courses_images
+app.get('/api/news_images', (req, res) => {
+  // let sql = 'SELECT * FROM news_images ';
+  let sql = 'SELECT * FROM news_images';
+  con.query(sql, (err, results) => {
+    if(err) throw err;
+    res.send(results);
+  });
+});
+
+// 新增联系信息
+app.post('/api/contact', (req, res) => {
+  let form = req.body;
+  // 输入验证，确保 name，phone 和 content 不为空
+  if (!form.name || !form.phone || !form.content) {
+    return res.status(400).json({ error: '姓名、电话和留言内容不能为空' });
+  }
+
+  const checkQuery = 'SELECT * FROM contacts WHERE name = ? AND phone = ?';
+  const checkData = [form.name, form.phone];
+
+  // 先进行查询操作
+  con.query(checkQuery, checkData, (err, results) => {
+    if (err) {
+      console.error('查询数据库时出错:', err);
+      return res.status(500).json({ error: '查询数据库时出错' });
+    }
+
+    if (results.length > 0) {
+      // 如果查询结果不为空，说明联系信息已存在，返回 409 冲突状态码
+      return res.status(409).json({ error: '联系信息已存在' });
+    } else {
+      // 如果查询结果为空，说明联系信息不存在，可以进行插入操作
+      const insertQuery = 'INSERT INTO contacts (name, phone, email, content, date) VALUES (?, ?, ?, ?, ?)';
+      const insertData = [form.name, form.phone, form.email, form.content, new Date()];
+
+      con.query(insertQuery, insertData, (err, results) => {
+        if (err) {
+          console.error('插入数据库时出错:', err);
+          return res.status(500).json({ error: '插入数据库时出错' });
+        }
+        res.status(200).json({ message: '联系信息已提交' }); // 创建成功
+      });
+    }
+  });
+});
+
 
 
 // 最后，添加错误处理器
