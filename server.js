@@ -575,12 +575,23 @@ app.post('/api/postReservation', (req, res) => {
 // search 搜索接口
 app.get('/api/search', (req, res) => {
   const queryParameters = req.query;
+  const searchQuery = queryParameters.query ? `%${queryParameters.query}%` : '%';
+  const category = queryParameters.category ? queryParameters.category : '';
 
-  // 数据库查询语句：在这里您可以根据您的实际需求进行修改
-  const sql = `SELECT * FROM courses WHERE title LIKE '%${queryParameters.query}%'`;
+  console.log(searchQuery)
+  console.log(category)
+
+  // SQL查询语句：根据参数进行过滤
+  let sql = 'SELECT * FROM courses WHERE title LIKE ?';
+  const sqlParams = [searchQuery];
+
+  if (category) {
+    sql += ' AND category = ?';
+    sqlParams.push(category);
+  }
 
   // 执行查询语句
-  con.query(sql, function(err, result) {
+  con.query(sql, sqlParams, function(err, result) {
     if (err) throw err;
 
     // 返回查询结果
