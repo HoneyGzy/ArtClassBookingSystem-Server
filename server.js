@@ -704,11 +704,13 @@ app.get('/api/getInfocourseregistration', function(req, res) {
 app.post('/api/courseregistration_status', (req, res) => {
   // 在这里处理你的逻辑，例如记录支付状态到数据库
   let courseId = req.body.params.courseId
+  let reservationStatus = req.body.params.reservationStatus
+  let username = req.body.params.username
 
   // 更新数据库
-  const sql = `UPDATE reservations SET reservationStatus = '预约成功' WHERE courseId = ?`;
+  const sql = `UPDATE reservations SET reservationStatus = ? WHERE courseId = ? AND username = ?`;
 
-  con.query(sql, [courseId], (err, result) => {
+  con.query(sql, [reservationStatus,courseId,username], (err, result) => {
     if(err) throw err;
     console.log(`更改了${result.affectedRows}行`);
   });
