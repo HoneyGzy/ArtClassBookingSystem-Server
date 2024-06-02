@@ -259,6 +259,32 @@ app.get('/api/courses', (req, res) => {
   });
 });
 
+
+//获取指定老师的课程列表接口
+app.get('/api/courses/teacher', (req, res) => {
+  // 从 req.query 中获取参数，而不是 req.body.params
+  let username = req.query.username;
+
+  const sql =  `SELECT * 
+  FROM courses
+  WHERE teacher_id IN (
+    SELECT teacher_id
+    FROM users
+    WHERE username = ?
+  );`; 
+
+  con.query(sql, [username], (err, result) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('服务器错误');
+    }
+
+    // 发送查询结果回客户端，而不是简单的成功消息
+    res.status(200).json(result);
+  });  
+});
+
+
 // 获取指定课程列表接口
 app.get('/api/courses/:course_id', (req, res) => {
   const course_id = req.params.course_id;
