@@ -113,6 +113,7 @@ con.connect(function(err) {
       parentsPhone VARCHAR(20),
       birthday DATE,
       address VARCHAR(255),
+      teacher_id INT,
       PRIMARY KEY (id)
     )`,
     function (err, result) {
@@ -486,14 +487,16 @@ app.post('/login', async (req, res) => {
 
 // 用户注册路由
 app.post('/api/register', (req, res) => {
-  const { role, username, password, teacherId } = req.body;
+  const { role, username, password, teacher_id } = req.body;
+
+  console.log(req.body)
   // hash user password
   bcrypt.genSalt(saltRounds, function(err, salt) {
     bcrypt.hash(password, salt, function(err, hash) {
       // Store hashed password in your DB.
       var sql = "INSERT INTO users (role, username, password, teacher_id) VALUES ?";
       var values = [
-        [role, username, hash, teacherId]
+        [role, username, hash, teacher_id]
       ];
       con.query(sql, [values], function (err, result) {
         if (err) {
@@ -779,10 +782,46 @@ app.get('/api/user/profile', (req, res) => {
   });
 });
 
+
+// API端点，获取用户资料，包括teacher_name
+app.get('/api/getuser', (req, res) => {
+  const username = req.query.username;
+  console.log(username)
+  const query = 'SELECT * FROM users WHERE username = ?';
+  
+  con.query(query, [username], (err, results) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+    } else if (results.length > 0) {
+      const userProfile = results[0];
+      const teacherIdQuery = `
+        SELECT courses.teacher, courses.teacher_id
+        FROM users
+        LEFT JOIN courses ON users.teacher_id = courses.teacher_id
+        WHERE users.username = ?`;
+      console.log(teacherIdQuery);
+      
+      con.query(teacherIdQuery, [userProfile.username], (err, teacherResults) => {
+        if (err) {
+          res.status(500).json({ error: err.message });
+        } else if (teacherResults.length > 0) {
+          userProfile.teacher_id = teacherResults[0].teacher_id;
+          userProfile.teacher = teacherResults[0].teacher;
+          res.json(userProfile);
+        } else {
+          res.status(404).json({ error: 'Teacher ID not found' });
+        }
+      });
+    } else {
+      res.status(404).json({ error: 'User not found' });
+    }
+  });
+});
+
 // 提交用户信息
 app.post('/api/user/profile', (req, res) => {
   // 从请求体中获取所有字段
-  let { id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address } = req.body;
+  let { id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address ,teacher_id} = req.body;
 
   // Parse registerTime to a date object and format it in MySQL standard datetime format
   if (registerTime) {
@@ -800,8 +839,8 @@ app.post('/api/user/profile', (req, res) => {
       res.status(500).json({ error: checkErr.message });
     } else if (checkResults.length > 0) {
       // 用户已存在，更新信息
-      const updateQuery = `UPDATE profile SET username = ?, name = ?, email = ?, phone = ?, registerTime = ?, gender = ?, parentsName = ?, parentsPhone = ?, birthday = ?, address = ? WHERE username = ?`;
-      con.query(updateQuery, [username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address, username], (updateErr) => {
+      const updateQuery = `UPDATE profile SET username = ?, name = ?, email = ?, phone = ?, registerTime = ?, gender = ?, parentsName = ?, parentsPhone = ?, birthday = ?, address = ?, teacher_id =? WHERE username = ?`;
+      con.query(updateQuery, [username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address, teacher_id, username], (updateErr) => {
         if (updateErr) {
           res.status(500).json({ error: updateErr.message });
         } else {
@@ -810,8 +849,8 @@ app.post('/api/user/profile', (req, res) => {
       });
     } else {
       // 新用户，插入记录
-      const insertQuery = `INSERT INTO profile (id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-      con.query(insertQuery, [id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address], (insertErr) => {
+      const insertQuery = `INSERT INTO profile (id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address, teacher_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      con.query(insertQuery, [id, username, name, email, phone, registerTime, gender, parentsName, parentsPhone, birthday, address, teacher_id], (insertErr) => {
         if (insertErr) {
           res.status(500).json({ error: insertErr.message });
         } else {
