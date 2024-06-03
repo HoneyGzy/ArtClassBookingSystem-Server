@@ -85,8 +85,7 @@ con.connect(function(err) {
   // 创建 news_images 表（包括 newid 字段）
   con.query(`
     CREATE TABLE IF NOT EXISTS news_images (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      newid VARCHAR(255) NOT NULL,
+      newid VARCHAR(255) NOT NULL PRIMARY KEY,
       image_path VARCHAR(255) NOT NULL,
       title VARCHAR(255) NOT NULL,
       content TEXT NOT NULL,
@@ -1284,6 +1283,29 @@ app.get('/api/news_images', (req, res) => {
     res.send(results);
   });
 });
+
+// http://localhost:3000/api/courses_images
+app.delete('/api/news_images/:newid', (req, res) => {
+  // 从请求中获取newid参数
+  const { newid } = req.params;
+
+  // DELETE SQL语句，根据newid删除指定的新闻图片
+  let sql = 'DELETE FROM news_images WHERE newid = ?';
+
+  // 执行SQL语句
+  con.query(sql, [newid], (err, result) => {
+    if (err) {
+      // 如果执行SQL时出错，返回错误信息
+      console.error("Error occurred: ", err);
+      res.status(500).send({ error: "An error occurred while deleting the news image." });
+    } else {
+      // 如果成功执行，响应删除成功的消息
+      console.log(`Deleted ${result.affectedRows} row(s)`);
+      res.send({ success: true, message: 'News image has been successfully deleted.', deletedNewid: newid });
+    }
+  });
+});
+
 
 // 新增联系信息
 app.post('/api/contact', (req, res) => {
