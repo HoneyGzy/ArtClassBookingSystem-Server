@@ -75,7 +75,7 @@ con.connect(function(err) {
 
    //创建 course_images 表
    con.query(
-    "CREATE TABLE IF NOT EXISTS course_images (id INT AUTO_INCREMENT PRIMARY KEY, course_id INT NOT NULL UNIQUE, image BLOB, reservation_count INT NULL)",
+    "CREATE TABLE IF NOT EXISTS course_images (id INT AUTO_INCREMENT PRIMARY KEY, course_id INT NOT NULL UNIQUE, image BLOB, reservation_count INT DEFAULT 0)",
     function (err, result) {
       if (err) throw err;
       console.log("course_images table created");
@@ -217,10 +217,15 @@ app.post('/upload', upload.single('file'), (req, res, next) => {
 
 // http://localhost:3000/api/courses_images
 app.get('/api/courses_images', (req, res) => {
-  // let sql = 'SELECT * FROM course_images JOIN courses on course_images.course_id = courses.course_id';
-  let sql = 'SELECT * FROM course_images';
+  // SQL 查询语句：按照 reservation_count 从大到小排序，并限制返回前6条记录
+  let sql = 'SELECT * FROM course_images ORDER BY reservation_count DESC LIMIT 6';
+  
   con.query(sql, (err, results) => {
-    if(err) throw err;
+    if (err) {
+      console.error('查询course_images时出错：', err);
+      return res.status(500).json({status: "error", message: "查询数据时出错，请稍后再试"});
+    }
+    
     res.send(results);
   });
 });
@@ -549,7 +554,6 @@ app.delete('/api/deleteUsers/:id', (req, res) => {
     res.status(200).send({ message: '用户删除成功' });
   });
 });
-
 // 对应前端 '/api/postReservation' 的POST请求
 app.post('/api/postReservation', (req, res) => {
   try {
@@ -573,30 +577,46 @@ app.post('/api/postReservation', (req, res) => {
             courseId: courseId,
             courseTitle: courseTitle,
             reservationStatus: '审核中', // 预约状态，这里默认为"成功"
-            paymentStatus:'未支付',
+            paymentStatus: '未支付',
             courseTime: new Date() // 课程时间
         }
 
         // 如果没有预约，进行预约操作
-        let sql = "INSERT INTO reservations (username, courseId,reservationStatus, courseTime, courseTitle, paymentStatus) VALUES ?";
+        let sql = "INSERT INTO reservations (username, courseId, reservationStatus, courseTime, courseTitle, paymentStatus) VALUES ?";
         let values = [
-          [reservation.username, reservation.courseId, reservation.reservationStatus, reservation.courseTime, reservation.courseTitle,reservation.paymentStatus]
+          [reservation.username, reservation.courseId, reservation.reservationStatus, reservation.courseTime, reservation.courseTitle, reservation.paymentStatus]
         ];
 
         con.query(sql, [values], function (err, result) {
-          if (err) throw err;
-          console.log("Number of records inserted: " + result.affectedRows)
+          if (err) {
+            console.error('插入预约记录时出错：', err);
+            return res.status(500).json({status: "error", message: "预约插入失败，请稍后再试。"});
+          }
+          console.log("Number of records inserted: " + result.affectedRows);
 
-          // 返回预约状态和课程时间
-          res.json({
-                reservationStatus: reservation.reservationStatus,
-                courseTime: reservation.courseTime
+          // 更新 course_images 表的 reservation_count 字段
+          let updateSql = "UPDATE course_images SET reservation_count = reservation_count + 1 WHERE course_id = ?";
+          
+          con.query(updateSql, [courseId], function (err, result) {
+            if (err) {
+              console.error('更新reservation_count时出错：', err);
+              return res.status(500).json({status: "error", message: "更新预约计数失败，请稍后再试。"});
+            }
+
+            console.log("Number of records updated: " + result.affectedRows);
+
+            // 返回预约状态和课程时间
+            res.json({
+              reservationStatus: reservation.reservationStatus,
+              courseTime: reservation.courseTime
+            });
           });
         });
       });
   } catch (error) {
+      console.error('处理预约时发生异常：', error);
       // 发生错误，返回错误状态码和错误信息
-      res.status(500).json({error: "预约失败，请稍后再试。"}); 
+      res.status(500).json({status: "error", message: "预约失败，请稍后再试。"}); 
   }
 });
 
