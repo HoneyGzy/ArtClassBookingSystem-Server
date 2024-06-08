@@ -654,7 +654,7 @@ app.get('/api/courseregistration', function(req, res) {
 
   // 构造SQL查询，以在注册表中查找匹配的用户名
   //let sql = `SELECT * FROM reservations WHERE username = ?`;
-  let sql = `select * from reservations join courses on reservations.courseTitle = courses.title where reservations.username = ? and reservations.paymentStatus = '未支付'`;
+  let sql = `select * from reservations join courses on reservations.courseTitle = courses.title where reservations.username = ? and reservations.reservationStatus = '预约成功'`;
 
   // 执行查询
   con.query(sql, username, function(err, result) {
