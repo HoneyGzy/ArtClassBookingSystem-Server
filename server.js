@@ -493,21 +493,43 @@ app.post('/login', async (req, res) => {
 app.post('/api/register', (req, res) => {
   const { role, username, password, teacher_id } = req.body;
 
-  console.log(req.body)
-  // hash user password
-  bcrypt.genSalt(saltRounds, function(err, salt) {
-    bcrypt.hash(password, salt, function(err, hash) {
-      // Store hashed password in your DB.
-      var sql = "INSERT INTO users (role, username, password, teacher_id) VALUES ?";
-      var values = [
-        [role, username, hash, teacher_id]
-      ];
-      con.query(sql, [values], function (err, result) {
+  console.log(req.body);
+  // 检查用户名是否存在
+  var checkSql = "SELECT * FROM users WHERE username = ?";
+  con.query(checkSql, [username], function (err, result) {
+    if (err) {
+      console.error(err);
+      return res.status(500).send('服务器错误');
+    }
+    if (result.length > 0) {
+      // 用户名已存在
+      return res.status(400).send('用户名已存在');
+    }
+
+    // 如果用户名不存在，则继续注册流程
+    // hash user password
+    bcrypt.genSalt(saltRounds, function(err, salt) {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('服务器错误');
+      }
+      bcrypt.hash(password, salt, function(err, hash) {
         if (err) {
           console.error(err);
           return res.status(500).send('服务器错误');
         }
-        res.status(200).send('注册成功');
+        // Store hashed password in your DB.
+        var sql = "INSERT INTO users (role, username, password, teacher_id) VALUES ?";
+        var values = [
+          [role, username, hash, teacher_id]
+        ];
+        con.query(sql, [values], function (err, result) {
+          if (err) {
+            console.error(err);
+            return res.status(500).send('服务器错误');
+          }
+          res.status(200).send('注册成功');
+        });
       });
     });
   });
